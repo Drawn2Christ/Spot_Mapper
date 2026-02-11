@@ -60,11 +60,20 @@
       <button id="btnMyPos">📍 Swim setzen</button>
     </div>
 
-    <div class="row">
-      <button id="btnCompass" class="primary">🧭 Kompass aktivieren</button>
-      <button id="btnAddSpot">➕ Spot speichern</button>
-      <button id="btnClearMarkers">🧹 Marker neu zeichnen</button>
-    </div>
+<div class="row">
+  <select id="swimSelect"></select>
+  <button id="btnNewSwim">➕ Neuer Swim</button>
+  <button id="btnRenameSwim">✏️ Swim umbenennen</button>
+  <button id="btnDeleteSwim" class="danger">🗑 Swim löschen</button>
+</div>
+
+<div class="row">
+  <button id="btnCompass" class="primary">🧭 Kompass aktivieren</button>
+  <button id="btnMyPos">📍 Swim setzen</button>
+  <button id="btnAddSpot">➕ Spot speichern</button>
+  <button id="btnClearMarkers">🧹 Marker neu zeichnen</button>
+</div>
+
 
     <div class="small">
       <div>Swim: <span id="swimInfo" class="mono">nicht gesetzt</span></div>
@@ -152,7 +161,7 @@
   }
 
   // Per lake structure:
-  // lakes[lakeName] = { swim: {lat,lng,ts}, spots: [{id,name,dist,bearing,notes,ts}] }
+// lakes[lakeName] = { swims: [{id,name,lat,lng,ts}], activeSwimId: string|null, spots: [...] }
   let lakes = loadAll();
   let currentLake = null;
 
@@ -195,11 +204,14 @@
     if (!currentLake) return;
     const lakeData = lakes[currentLake];
     if (!lakeData || !lakeData.spots) return;
-    if (!lakeData.swim) return;
+ const a = getActiveSwim();
+if (!a) return;
 
-    const s = lakeData.swim;
-    lakeData.spots.forEach(sp => {
-      const latlng = destinationPoint({lat:s.lat,lng:s.lng}, sp.bearing, sp.dist);
+const s = a;
+(lakeData.spots || []).forEach(sp => {
+  const latlng = destinationPoint({lat:s.lat,lng:s.lng}, sp.bearing, sp.dist);
+...
+
       const m = L.marker(latlng, {title: sp.name || "Spot"}).addTo(map);
       m.on('click', () => selectSpot(sp.id));
       m.bindPopup(`<b>${escapeHtml(sp.name || "Spot")}</b><br>${sp.dist.toFixed(1)} m • ${sp.bearing.toFixed(0)}°`);
@@ -299,12 +311,139 @@
     const lake = (name || "").trim();
     if (!lake) { alert("Bitte See-Name eingeben."); return; }
     currentLake = lake;
-    if (!lakes[currentLake]) lakes[currentLake] = { swim: null, spots: [] };
+if (!lakes[currentLake]) lakes[currentLake] = { swims: [], activeSwimId: null, spots: [] };
 
-    // restore swim
-    const ld = lakes[currentLake];
-    swim = ld.swim ? { lat: ld.swim.lat, lng: ld.swim.lng } : null;
-    targetSpot = null;
+// Backward-Compat: alte Struktur {swim: {...}} in neues System umwandeln
+const ld = lakes[currentLake];
+if (ld.swim && (!ld.swims || ld.swims.length === 0)) {
+  const legacyId = "legacy-" + Date.now();
+  ld.swims = [{
+    id: legacyId,
+    name: "Swim 1",
+    lat: ld.swim.lat,
+    lng: ld.swim.lng,
+    ts: ld.swim.ts || Date.now()
+  }];
+  ld.activeSwimId = legacyId;
+  delete ld.swim;
+  persistLake();
+}
+function ensureSwimDefaults() {
+  const ld = lakes[currentLake];
+  if (!ld.swims) ld.swims = [];
+  if (ld.activeSwimId === undefined) ld.activeSwimId = null;
+
+  // Wenn es Swims gibt, aber keiner aktiv ist -> ersten aktiv machen
+  if (ld.swims.length > 0 && !ld.activeSwimId) {
+    ld.activeSwimId = ld.swims[0].id;
+    persistLake();
+  }
+
+  renderSwimSelect();
+}
+
+function getActiveSwim() {
+  const ld = lakes[currentLake];
+  if (!ld || !ld.swims || ld.swims.length === 0) return null;
+  return ld.swims.find(s => s.id === ld.activeSwimId) || ld.swims[0];
+}
+
+function syncActiveSwimToState() {
+  const a = getActiveSwim();
+  swim = a ? { lat: a.lat, lng: a.lng } : null;
+  if (swim) setSwimMarker(swim);
+  updateSwimInfo();
+  drawSpotMarkers();
+}
+
+function renderSwimSelect() {
+  const sel = $('swimSelect');
+  if (!sel) return;
+
+  if (!currentLake) {
+    sel.innerHTML = `<option>–</option>`;
+    return;
+  }
+
+  const ld = lakes[currentLake];
+  sel.innerHTML = "";
+
+  if (!ld.swims || ld.swims.length === 0) {
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = "Kein Swim – bitte setzen";
+    sel.appendChild(opt);
+    return;
+  }
+
+  ld.swims.forEach(s => {
+    const opt = document.createElement("option");
+    opt.value = s.id;
+    opt.textContent = s.name || "Swim";
+    if (s.id === ld.activeSwimId) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+function setActiveSwim(id) {
+  const ld = lakes[currentLake];
+  ld.activeSwimId = id || null;
+  persistLake();
+  syncActiveSwimToState();
+  renderSwimSelect();
+}
+
+function createNewSwim() {
+  if (!currentLake) { alert("Bitte erst See laden."); return; }
+  const name = prompt("Name für neuen Swim (z.B. Nordufer / Parkplatz):", "Neuer Swim");
+  if (name === null) return;
+
+  // optional direkt mit GPS setzen, wenn verfügbar
+  if (!userPos) {
+    alert("GPS noch nicht verfügbar. Bitte erst Standort erlauben, dann nochmal.");
+    return;
+  }
+
+  const id = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2));
+  const ld = lakes[currentLake];
+  ld.swims.push({ id, name: name.trim() || "Swim", lat: userPos.lat, lng: userPos.lng, ts: Date.now() });
+  ld.activeSwimId = id;
+  persistLake();
+  renderSwimSelect();
+  syncActiveSwimToState();
+}
+
+function renameActiveSwim() {
+  const a = getActiveSwim();
+  if (!a) { alert("Kein aktiver Swim vorhanden."); return; }
+  const name = prompt("Neuer Name für Swim:", a.name || "Swim");
+  if (name === null) return;
+  const ld = lakes[currentLake];
+  const s = ld.swims.find(x => x.id === a.id);
+  if (!s) return;
+  s.name = name.trim() || s.name;
+  persistLake();
+  renderSwimSelect();
+  syncActiveSwimToState();
+}
+
+function deleteActiveSwim() {
+  const a = getActiveSwim();
+  if (!a) { alert("Kein aktiver Swim vorhanden."); return; }
+  const ok = confirm(`Swim "${a.name}" wirklich löschen? (Spots bleiben, aber werden relativ zum neuen aktiven Swim angezeigt.)`);
+  if (!ok) return;
+  const ld = lakes[currentLake];
+  ld.swims = ld.swims.filter(s => s.id !== a.id);
+  ld.activeSwimId = ld.swims.length ? ld.swims[0].id : null;
+  persistLake();
+  renderSwimSelect();
+  syncActiveSwimToState();
+}
+
+ensureSwimDefaults();
+syncActiveSwimToState();
+targetSpot = null;
+
 
     // update UI + map
     if (swim) setSwimMarker(swim);
@@ -315,15 +454,34 @@
     drawSpotMarkers();
   }
 
-  function setSwimFromCurrentGPS() {
-    if (!userPos) { alert("GPS noch nicht verfügbar. Erst Standort erlauben."); return; }
-    swim = { lat: userPos.lat, lng: userPos.lng };
-    lakes[currentLake].swim = { ...swim, ts: Date.now() };
-    persistLake();
-    setSwimMarker(swim);
-    updateSwimInfo();
-    drawSpotMarkers();
+function setSwimFromCurrentGPS() {
+  if (!userPos) { alert("GPS noch nicht verfügbar. Erst Standort erlauben."); return; }
+  if (!currentLake) { alert("Bitte erst See laden."); return; }
+
+  const ld = lakes[currentLake];
+  ensureSwimDefaults();
+
+  const a = getActiveSwim();
+  if (!a) {
+    // falls noch kein Swim existiert -> neuen anlegen
+    const id = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2));
+    ld.swims.push({ id, name: "Swim 1", lat: userPos.lat, lng: userPos.lng, ts: Date.now() });
+    ld.activeSwimId = id;
+  } else {
+    // aktiven Swim updaten
+    const s = ld.swims.find(x => x.id === a.id);
+    if (s) {
+      s.lat = userPos.lat;
+      s.lng = userPos.lng;
+      s.ts = Date.now();
+    }
   }
+
+  persistLake();
+  renderSwimSelect();
+  syncActiveSwimToState();
+}
+
 
   function selectSpot(id) {
     const ld = lakes[currentLake];
@@ -513,6 +671,10 @@
   $('btnExport').addEventListener('click', exportJSON);
   $('btnImport').addEventListener('click', importJSON);
   $('btnDeleteLake').addEventListener('click', deleteLake);
+  $('swimSelect').addEventListener('change', (e) => setActiveSwim(e.target.value));
+  $('btnNewSwim').addEventListener('click', createNewSwim);
+  $('btnRenameSwim').addEventListener('click', renameActiveSwim);
+  $('btnDeleteSwim').addEventListener('click', deleteActiveSwim);
 
   // Init
   renderSpotList();

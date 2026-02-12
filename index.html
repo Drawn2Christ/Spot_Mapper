@@ -4,35 +4,30 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
   <title>Spot-Mapper</title>
-
-  <!-- Icons (optional, falls du sie schon hochgeladen hast) -->
+  <!-- Icons -->
   <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
   <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16.png">
+
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Spot-Map">
 
-  <!-- Leaflet (OSM Karte) - jsDelivr (seltener geblockt als unpkg) -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" crossorigin="anonymous">
-  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
+  <!-- Leaflet (OSM Karte) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="anonymous">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
 
   <style>
     body { margin: 0; font-family: -apple-system, system-ui, Segoe UI, Roboto, Arial; }
-    /* iOS/Standalone friendly */
-    #map { height: 55vh; min-height: 340px; width: 100vw; background: #f2f2f2; }
-
+    #map { height: 55vh; width: 100vw; }
     .panel { padding: 12px; }
     .row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
     button { padding: 10px 12px; border: 1px solid #ccc; background: #fff; border-radius: 10px; }
     button.primary { border-color: #111; }
-    button.danger { border-color:#b00; color:#b00; }
-    input, select { padding: 10px; border: 1px solid #ccc; border-radius: 10px; flex: 1; min-width: 150px; }
-
+    input, select { padding: 10px; border: 1px solid #ccc; border-radius: 10px; flex: 1; min-width: 130px; }
     .small { font-size: 12px; color: #444; }
     .card { border: 1px solid #ddd; border-radius: 12px; padding: 10px; margin: 8px 0; }
     .mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
-
     .compassWrap { display:flex; gap: 12px; align-items:center; margin-top: 10px; }
     .compass {
       width: 84px; height: 84px; border-radius: 50%;
@@ -49,8 +44,9 @@
       width: 0; height: 0; border-left: 7px solid transparent;
       border-right: 7px solid transparent; border-bottom: 10px solid #111;
     }
-
-    hr { border: none; border-top: 1px solid #eee; margin: 12px 0; }
+    .status { font-weight: 600; }
+    .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .danger { border-color:#b00; color:#b00; }
   </style>
 </head>
 
@@ -58,35 +54,22 @@
   <div id="map"></div>
 
   <div class="panel">
-    <!-- See -->
     <div class="row">
       <input id="lakeName" placeholder="See / Gewässer (z.B. Ambührener See)" />
       <button id="btnLoad" class="primary">See laden</button>
-      <button id="btnSetSwimFromGPS">📍 Swim setzen</button>
+      <button id="btnMyPos">📍 Swim setzen</button>
     </div>
 
-    <!-- Multi Swims -->
-    <div class="row">
-      <select id="swimSelect"></select>
-      <button id="btnNewSwim">➕ Neuer Swim</button>
-      <button id="btnRenameSwim">✏️ Swim umbenennen</button>
-      <button id="btnDeleteSwim" class="danger">🗑 Swim löschen</button>
-    </div>
-
-    <!-- Actions -->
     <div class="row">
       <button id="btnCompass" class="primary">🧭 Kompass aktivieren</button>
       <button id="btnAddSpot">➕ Spot speichern</button>
-      <button id="btnRedraw">🧹 Marker neu zeichnen</button>
+      <button id="btnClearMarkers">🧹 Marker neu zeichnen</button>
     </div>
 
-    <!-- Info -->
     <div class="small">
-      <div>Aktiver Swim: <span id="swimNameInfo" class="mono">–</span></div>
-      <div>Swim Koordinate: <span id="swimInfo" class="mono">nicht gesetzt</span></div>
+      <div>Swim: <span id="swimInfo" class="mono">nicht gesetzt</span></div>
       <div>Heading: <span id="headingInfo" class="mono">–</span></div>
       <div>Ausgewählter Spot: <span id="targetInfo" class="mono">–</span></div>
-      <div>Wraps (3,60m): <span id="wrapInfo" class="mono">–</span></div>
     </div>
 
     <div class="compassWrap">
@@ -94,38 +77,57 @@
         <div id="needle" class="needle"></div>
       </div>
       <div>
-        <div class="small" style="font-weight:600;" id="compassStatus">Kompass aus</div>
+        <div class="status" id="compassStatus">Kompass aus</div>
         <div class="small">Der Pfeil zeigt zum ausgewählten Spot (wenn einer ausgewählt ist).</div>
+        <div class="small">Wraps (3,60m): <span id="wrapInfo" class="mono">–</span></div>
       </div>
     </div>
 
     <hr>
 
-    <!-- Export/Import -->
     <div class="row">
+      <select id="spotSort">
+        <option value="new">Sortierung: Neueste zuerst</option>
+        <option value="name">Sortierung: Name</option>
+        <option value="dist">Sortierung: Distanz</option>
+      </select>
       <button id="btnExport">⬇️ Export JSON</button>
       <button id="btnImport">⬆️ Import JSON</button>
       <button id="btnDeleteLake" class="danger">🗑 See löschen</button>
     </div>
 
-    <!-- Spots -->
     <div id="spotList"></div>
   </div>
 
 <script>
 (() => {
+  // ---------- Helpers ----------
   const $ = (id) => document.getElementById(id);
 
-  // ---------- Helpers ----------
   const toRad = (deg) => deg * Math.PI / 180;
   const toDeg = (rad) => rad * 180 / Math.PI;
-  const clamp360 = (deg) => (deg % 360 + 360) % 360;
 
-  function escapeHtml(str) {
-    return String(str).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+  function haversineMeters(a, b) {
+    const R = 6371000;
+    const dLat = toRad(b.lat - a.lat);
+    const dLng = toRad(b.lng - a.lng);
+    const lat1 = toRad(a.lat);
+    const lat2 = toRad(b.lat);
+    const x = Math.sin(dLat/2)**2 + Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLng/2)**2;
+    return 2 * R * Math.asin(Math.sqrt(x));
   }
 
-  // destination point from start, bearing, distance
+  // Bearing from point A to B (degrees 0..360)
+  function bearingDeg(a, b) {
+    const lat1 = toRad(a.lat), lat2 = toRad(b.lat);
+    const dLng = toRad(b.lng - a.lng);
+    const y = Math.sin(dLng) * Math.cos(lat2);
+    const x = Math.cos(lat1)*Math.sin(lat2) - Math.sin(lat1)*Math.cos(lat2)*Math.cos(dLng);
+    const brng = (toDeg(Math.atan2(y, x)) + 360) % 360;
+    return brng;
+  }
+
+  // Destination point from start, bearing, distance
   function destinationPoint(start, bearing, distMeters) {
     const R = 6371000;
     const brng = toRad(bearing);
@@ -133,5 +135,389 @@
     const dr = distMeters / R;
 
     const lat2 = Math.asin(Math.sin(lat1)*Math.cos(dr) + Math.cos(lat1)*Math.sin(dr)*Math.cos(brng));
-    const lng2 = lng1 + Math.atan2(
-      Math.sin(brng)*Math.sin(dr)*Ma
+    const lng2 = lng1 + Math.atan2(Math.sin(brng)*Math.sin(dr)*Math.cos(lat1), Math.cos(dr)-Math.sin(lat1)*Math.sin(lat2));
+    return { lat: toDeg(lat2), lng: (toDeg(lng2)+540)%360 - 180 };
+  }
+
+  function clamp360(deg) { return (deg % 360 + 360) % 360; }
+
+  // ---------- Storage ----------
+  const STORAGE_KEY = "spot_mapper_v1";
+  function loadAll() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"); }
+    catch { return {}; }
+  }
+  function saveAll(data) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  }
+
+  // Per lake structure:
+  // lakes[lakeName] = { swim: {lat,lng,ts}, spots: [{id,name,dist,bearing,notes,ts}] }
+  let lakes = loadAll();
+  let currentLake = null;
+
+  // ---------- State ----------
+  let swim = null;          // {lat,lng}
+  let userPos = null;       // current gps position
+  let heading = null;       // degrees 0..360 (device)
+  let targetSpot = null;    // selected spot object
+  let markers = [];
+
+  // ---------- Map ----------
+  const map = L.map('map');
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, attribution: '&copy; OpenStreetMap'
+  }).addTo(map);
+  map.setView([52.85, 8.05], 12); // roughly Cloppenburg area
+
+  let swimMarker = null;
+  let userMarker = null;
+
+  function setSwimMarker(latlng) {
+    if (swimMarker) swimMarker.remove();
+    swimMarker = L.marker(latlng, {title: "Swim"}).addTo(map);
+    swimMarker.bindPopup("Swim (Startpunkt)").openPopup();
+  }
+
+  function setUserMarker(latlng) {
+    if (userMarker) userMarker.remove();
+    userMarker = L.circleMarker(latlng, {radius: 7}).addTo(map);
+    userMarker.bindPopup("Du (GPS)").closePopup();
+  }
+
+  function clearSpotMarkers() {
+    markers.forEach(m => m.remove());
+    markers = [];
+  }
+
+  function drawSpotMarkers() {
+    clearSpotMarkers();
+    if (!currentLake) return;
+    const lakeData = lakes[currentLake];
+    if (!lakeData || !lakeData.spots) return;
+    if (!lakeData.swim) return;
+
+    const s = lakeData.swim;
+    lakeData.spots.forEach(sp => {
+      const latlng = destinationPoint({lat:s.lat,lng:s.lng}, sp.bearing, sp.dist);
+      const m = L.marker(latlng, {title: sp.name || "Spot"}).addTo(map);
+      m.on('click', () => selectSpot(sp.id));
+      m.bindPopup(`<b>${escapeHtml(sp.name || "Spot")}</b><br>${sp.dist.toFixed(1)} m • ${sp.bearing.toFixed(0)}°`);
+      markers.push(m);
+    });
+  }
+
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+  }
+
+  // ---------- UI ----------
+  function updateSwimInfo() {
+    if (!swim) { $('swimInfo').textContent = "nicht gesetzt"; return; }
+    $('swimInfo').textContent = `${swim.lat.toFixed(6)}, ${swim.lng.toFixed(6)}`;
+  }
+
+  function updateHeadingInfo() {
+    $('headingInfo').textContent = heading == null ? "–" : `${heading.toFixed(0)}°`;
+  }
+
+  function updateTargetInfo() {
+    if (!targetSpot) { $('targetInfo').textContent = "–"; $('wrapInfo').textContent = "–"; return; }
+    $('targetInfo').textContent = `${targetSpot.name || "Spot"} • ${targetSpot.dist.toFixed(1)} m • ${targetSpot.bearing.toFixed(0)}°`;
+    const wraps = targetSpot.dist / 3.6;
+    $('wrapInfo').textContent = `${wraps.toFixed(1)} Wraps`;
+  }
+
+  function updateNeedle() {
+    // We want needle pointing to targetSpot bearing relative to current heading
+    // If no heading/target -> default
+    let angle = 0;
+    if (heading != null && targetSpot) {
+      // rotate needle so that it points "toward target" on screen:
+      // If heading equals target bearing => needle should point straight up (0deg)
+      const diff = clamp360(targetSpot.bearing - heading);
+      angle = diff;
+    }
+    $('needle').style.transform = `translate(-50%,-100%) rotate(${angle}deg)`;
+  }
+
+  function renderSpotList() {
+    const list = $('spotList');
+    list.innerHTML = "";
+
+    if (!currentLake) {
+      list.innerHTML = `<div class="card">Bitte oben einen See eingeben und <b>See laden</b> drücken.</div>`;
+      return;
+    }
+    const lakeData = lakes[currentLake] || { spots: [] };
+    let spots = [...(lakeData.spots || [])];
+
+    const sort = $('spotSort').value;
+    if (sort === "name") spots.sort((a,b) => (a.name||"").localeCompare(b.name||""));
+    else if (sort === "dist") spots.sort((a,b) => (a.dist||0) - (b.dist||0));
+    else spots.sort((a,b) => (b.ts||0) - (a.ts||0));
+
+    if (spots.length === 0) {
+      list.innerHTML = `<div class="card">Noch keine Spots gespeichert.</div>`;
+      return;
+    }
+
+    spots.forEach(sp => {
+      const isSel = targetSpot && targetSpot.id === sp.id;
+      const div = document.createElement('div');
+      div.className = "card";
+      div.innerHTML = `
+        <div style="display:flex;justify-content:space-between;gap:10px;">
+          <div>
+            <div><b>${escapeHtml(sp.name || "Spot")}</b> ${isSel ? "✅" : ""}</div>
+            <div class="small mono">${sp.dist.toFixed(1)} m • ${sp.bearing.toFixed(0)}° • ${(sp.dist/3.6).toFixed(1)} Wraps</div>
+            <div class="small">${escapeHtml(sp.notes || "")}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            <button data-act="sel" data-id="${sp.id}">🎯</button>
+            <button data-act="del" data-id="${sp.id}" class="danger">🗑</button>
+          </div>
+        </div>
+      `;
+      div.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = btn.getAttribute('data-id');
+          const act = btn.getAttribute('data-act');
+          if (act === "sel") selectSpot(id);
+          if (act === "del") deleteSpot(id);
+        });
+      });
+      list.appendChild(div);
+    });
+  }
+
+  function persistLake() {
+    saveAll(lakes);
+  }
+
+  function loadLake(name) {
+    const lake = (name || "").trim();
+    if (!lake) { alert("Bitte See-Name eingeben."); return; }
+    currentLake = lake;
+    if (!lakes[currentLake]) lakes[currentLake] = { swim: null, spots: [] };
+
+    // restore swim
+    const ld = lakes[currentLake];
+    swim = ld.swim ? { lat: ld.swim.lat, lng: ld.swim.lng } : null;
+    targetSpot = null;
+
+    // update UI + map
+    if (swim) setSwimMarker(swim);
+    updateSwimInfo();
+    updateTargetInfo();
+    updateNeedle();
+    renderSpotList();
+    drawSpotMarkers();
+  }
+
+  function setSwimFromCurrentGPS() {
+    if (!userPos) { alert("GPS noch nicht verfügbar. Erst Standort erlauben."); return; }
+    swim = { lat: userPos.lat, lng: userPos.lng };
+    lakes[currentLake].swim = { ...swim, ts: Date.now() };
+    persistLake();
+    setSwimMarker(swim);
+    updateSwimInfo();
+    drawSpotMarkers();
+  }
+
+  function selectSpot(id) {
+    const ld = lakes[currentLake];
+    const sp = (ld.spots || []).find(s => s.id === id);
+    if (!sp) return;
+    targetSpot = sp;
+    updateTargetInfo();
+    updateNeedle();
+    renderSpotList();
+  }
+
+  function deleteSpot(id) {
+    const ld = lakes[currentLake];
+    ld.spots = (ld.spots || []).filter(s => s.id !== id);
+    if (targetSpot && targetSpot.id === id) targetSpot = null;
+    persistLake();
+    renderSpotList();
+    drawSpotMarkers();
+    updateTargetInfo();
+    updateNeedle();
+  }
+
+  function addSpotFlow() {
+    if (!currentLake) { alert("Bitte erst See laden."); return; }
+    if (!swim) { alert("Bitte erst Swim setzen (📍)."); return; }
+
+    // We let the user enter name, distance, notes.
+    // Bearing defaults to current heading if available; otherwise ask.
+    const defaultBearing = heading != null ? Math.round(heading) : "";
+    const name = prompt("Spot-Name (z.B. Kante 14 Wraps):", "");
+    if (name === null) return;
+
+    const distStr = prompt("Distanz in Metern (z.B. 68):", "");
+    if (distStr === null) return;
+    const dist = Number(distStr.replace(",", "."));
+    if (!Number.isFinite(dist) || dist <= 0) { alert("Ungültige Distanz."); return; }
+
+    let bearingStr = prompt("Winkel/Bearing in Grad (0–359). Tipp: Wenn Kompass an ist, nimm den Heading-Wert.\nVorschlag:", String(defaultBearing));
+    if (bearingStr === null) return;
+    const bearing = clamp360(Number(String(bearingStr).replace(",", ".")));
+    if (!Number.isFinite(bearing)) { alert("Ungültiger Winkel."); return; }
+
+    const notes = prompt("Notizen (Tiefe, Boden, Rig, etc.) – optional:", "") || "";
+
+    const sp = {
+      id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2),
+      name: name.trim() || "Spot",
+      dist,
+      bearing,
+      notes,
+      ts: Date.now()
+    };
+    lakes[currentLake].spots.push(sp);
+    persistLake();
+    renderSpotList();
+    drawSpotMarkers();
+    selectSpot(sp.id);
+  }
+
+  // ---------- Geolocation ----------
+  function startGeolocation() {
+    if (!navigator.geolocation) {
+      alert("Geolocation wird nicht unterstützt.");
+      return;
+    }
+    navigator.geolocation.watchPosition(
+      (pos) => {
+        userPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setUserMarker(userPos);
+
+        // If no swim yet, center map on you (only first time)
+        if (!swim && map.getZoom() < 15) {
+          map.setView([userPos.lat, userPos.lng], 15);
+        }
+      },
+      (err) => {
+        console.warn(err);
+        alert("Standort konnte nicht abgerufen werden. Bitte Standort erlauben.");
+      },
+      { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 }
+    );
+  }
+
+  // ---------- Device Orientation / Compass ----------
+  let compassOn = false;
+
+  async function enableCompass() {
+    // iOS requires explicit permission in many cases
+    try {
+      if (typeof DeviceOrientationEvent !== "undefined" &&
+          typeof DeviceOrientationEvent.requestPermission === "function") {
+        const res = await DeviceOrientationEvent.requestPermission();
+        if (res !== "granted") {
+          $('compassStatus').textContent = "Kompass: keine Erlaubnis";
+          return;
+        }
+      }
+      window.addEventListener('deviceorientation', onOrientation, true);
+      compassOn = true;
+      $('compassStatus').textContent = "Kompass an ✅";
+    } catch (e) {
+      console.warn(e);
+      $('compassStatus').textContent = "Kompass Fehler";
+      alert("Kompass konnte nicht aktiviert werden. Prüfe iOS-Einstellungen > Safari > Bewegung & Ausrichtung.");
+    }
+  }
+
+  function onOrientation(e) {
+    // On iOS: webkitCompassHeading is best (0 = North)
+    if (typeof e.webkitCompassHeading === "number") {
+      heading = clamp360(e.webkitCompassHeading);
+    } else if (typeof e.alpha === "number") {
+      // Fallback: alpha is rotation around z-axis; may be relative; still usable sometimes
+      heading = clamp360(360 - e.alpha);
+    } else {
+      heading = null;
+    }
+    updateHeadingInfo();
+    updateNeedle();
+  }
+
+  // ---------- Export/Import ----------
+  function exportJSON() {
+    const dataStr = JSON.stringify(lakes, null, 2);
+    const blob = new Blob([dataStr], {type:"application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "spot-mapper-export.json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function importJSON() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "application/json";
+    input.onchange = async () => {
+      const file = input.files && input.files[0];
+      if (!file) return;
+      const text = await file.text();
+      try {
+        const obj = JSON.parse(text);
+        if (typeof obj !== "object" || obj === null) throw new Error("Invalid JSON");
+        lakes = obj;
+        persistLake();
+        // Reload current lake view
+        if (currentLake) loadLake(currentLake);
+        else renderSpotList();
+        alert("Import erfolgreich.");
+      } catch {
+        alert("Import fehlgeschlagen (ungültige Datei).");
+      }
+    };
+    input.click();
+  }
+
+  function deleteLake() {
+    if (!currentLake) return;
+    const ok = confirm(`See "${currentLake}" wirklich löschen? (Alle Spots weg)`);
+    if (!ok) return;
+    delete lakes[currentLake];
+    persistLake();
+    currentLake = null;
+    swim = null;
+    targetSpot = null;
+    clearSpotMarkers();
+    if (swimMarker) { swimMarker.remove(); swimMarker = null; }
+    $('swimInfo').textContent = "nicht gesetzt";
+    $('targetInfo').textContent = "–";
+    $('wrapInfo').textContent = "–";
+    renderSpotList();
+  }
+
+  // ---------- Wiring ----------
+  $('btnLoad').addEventListener('click', () => loadLake($('lakeName').value));
+  $('btnMyPos').addEventListener('click', () => {
+    if (!currentLake) { alert("Bitte erst See laden."); return; }
+    setSwimFromCurrentGPS();
+  });
+  $('btnCompass').addEventListener('click', enableCompass);
+  $('btnAddSpot').addEventListener('click', addSpotFlow);
+  $('btnClearMarkers').addEventListener('click', drawSpotMarkers);
+  $('spotSort').addEventListener('change', renderSpotList);
+  $('btnExport').addEventListener('click', exportJSON);
+  $('btnImport').addEventListener('click', importJSON);
+  $('btnDeleteLake').addEventListener('click', deleteLake);
+
+  // Init
+  renderSpotList();
+  startGeolocation();
+})();
+</script>
+</body>
+</html>
